@@ -1,12 +1,12 @@
 // Project:
-// Module: Transceptor
+// Module: Transceptor ,
 // Author: 
 // Date/Time: Oct.25/2023, 11:15PM
 // Description:
-// The following code is used to simulate the encoding and filtering process of a BPSK modulation
+// The following code is used to simulate the encoding and filtering process of a BPSK modulation with two phases
 // Pre:
 // - Y_carrier(f_carrier): Carrier wave with frequency 1/w_carrier [Hz]
-// - Y_data (f_data): Transmitted data with frequency 
+// - Y_data (f_data): Transmitted data with frequency 1/w_data [Hz]
  // Pos:
 // - Ybpsk(f_carrier): Transmitted signal in BSPK modulation
 
