@@ -10,7 +10,8 @@ use std::net::{SocketAddr};
 //use kyberlib::*;
 use kyberlib::{Keypair, KyberLibError, keypair};
 use rand::thread_rng;
-
+use chacha20poly1305::{ChaCha20Poly1305, Key, Nonce};
+use chacha20poly1305::aead::{Aead, OsRng, generic_array::GenericArray};
 
 #[tokio::main]
 async fn main() -> Result<(),Box<dyn std::error::Error>> 
@@ -53,39 +54,12 @@ async fn main() -> Result<(),Box<dyn std::error::Error>>
         socket.write_all(msg.as_bytes()).await?;
         println!("Connection from: {}", addr);
         println!("Sending requirement (ST:KY)");
-    
-        // To generate the public key 
-        //let public_key = public_key.public;
-        //let public_key_bytes: &[u8;1184] = public_key.public;
-        //To send the key to the remote client
-        //socket.write_all(public_key_bytes).await?;    
-        
-        
-        //socket.write_all(msg.as_bytes()).await?;
-        tokio::spawn(async move {
-            let mut buf = vec![0; 1024];
-            loop {
-                match socket.read(&mut buf).await {
-                    Ok(0) => {
-                        println!("Client {} disconnected", addr);
-                        return;
-                    }
-                    Ok(n) => {
-                        let msg = String::from_utf8_lossy(&buf[..n]);
-                        println!("Received from {}: {}", addr, msg);
+        //*** Encryption process ***
+        let key=snd_publicKey(socket);
+        let mut shared_secret=rcv_sharedsecret(socket,key);
+        let err=encrypt_msg(socket,shared_secret,msg);
 
-                        if socket.write_all(&buf[..n]).await.is_err() {
-                            println!("Failed to write to client {}", addr);
-                            return;
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!("Error reading from client {}: {}", addr, e);
-                        return;
-                    }
-                }
-            }
-        });
+
     }
 }
 
@@ -103,7 +77,14 @@ fn generateKey()-> Result<Keypair, KyberLibError>
     let key = keypair(&mut rng)?;
     Ok(key)
 }
-fn snd_publicKey(socket)
+// Req: Req.016
+// Description: 
+// It's used to send the public key to client and return the generated key
+// Date: 
+// Author: 
+// Pre:  socket handler
+// Post: Return -> Key
+fn snd_publicKey(socket: &mut TcpStream)
 {
         match generateKey()
         {
@@ -129,3 +110,65 @@ fn snd_publicKey(socket)
         }
 }
 
+// Req: Req.016
+// Description: 
+// This function reads the ciphered text from client
+// Date: 
+// Author: 
+// Pre:  socket handler, generated key
+// Post: secret
+
+fn rcv_sharedsecret(socket: &mut TcpStream,key: &PublicKey)-> Result<[u8; KYBER_SHARED_SECRET_BYTES], KyberLibError>
+{
+    cipher_bytes=match socket.read(&mut buf).await
+    {
+        Ok(0) => {
+            println!("Client {} disconnected", addr);
+            return;
+        }
+        Ok(n) => {
+            let msg = String::from_utf8_lossy(&buf[..n]);
+            println!("Received from {}: {}", addr, msg);
+
+        }
+        Err(e) => {
+            eprintln!("Error reading from client {}: {}", addr, e);
+            return;
+        }
+        
+    }
+    let ciphertext = Ciphertext::try_from(cipher_bytes.as_slice())?;
+    let secret = decapsulate(&ciphertext, &key.secret)?;
+    Ok(secret)
+}
+
+// Req: Req.016
+// Description: 
+// This function reads the shared secret  and encrypt the message to be sent by using ChaCha20Poly1305 symmetric encryption algorithm. 
+// Date: 
+// Author: 
+// Pre:  socket handler, shared secret, message to encrypt
+// Post: void
+
+fn encrypt_msg(socket:&mut TcpStream ,secret:&SharedSecret,msg:&str)
+{   const NONCE_LEN: usize = 12;
+    let key = Key::from_slice(secret.as_bytes()); 
+    let cipher = ChaCha20Poly1305::new(key);
+    let rannonce =&OsRng.gen_random_bytes()[..usize]
+    let nonce = Nonce::from_slice(rannonce); // Generate a random nonce
+    let ciphertext = cipher.encrypt(nonce, msg.as_bytes())
+        .expect("Error!: encryption");
+    let mut encrypted_msg = nonce.to_vec();
+    encrypted_msg.extend_from_slice(&ciphertext);
+    println!("Sending encrypted msg to terminal...");
+    if let Err(e) = socket.write_all(encrypted_msg)?; {
+        let error_code = match e.kind() {
+            io::ErrorKind::BrokenPipe => 1,
+            io::ErrorKind::ConnectionReset => 2,
+            _ => 99,
+        };
+        eprintln!("Failed to send data. Error code: {}", error_code);
+    } else {
+        println!("Data sent successfully!");
+    }
+}
