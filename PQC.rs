@@ -1,8 +1,11 @@
 // ********************
-// Project:
-// Module:
-// Ref:
-// 
+// Project: CarmelNet 
+// Module: Server
+// Author: 
+// Date/Time: Oct.25/2023, 11:15PM
+// Description:
+// The following code describes the server behavior
+
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::Tcpsock_handler;
 use local_ip_address::local_ip;
@@ -171,4 +174,28 @@ fn encrypt_msg(socket:&mut TcpStream ,secret:&SharedSecret,msg:&str)
     } else {
         println!("Data sent successfully!");
     }
+}
+
+// Req: Req.016
+// Description: 
+// This function reads the shared secret  and decrypt the received message from the remote terminal by using ChaCha20Poly1305 symmetric encryption algorithm. 
+// Date: 
+// Author: 
+// Pre:  shared secret, message to encrypt
+// Post: void
+
+fn decrypt_msg(secret:&SharedSecret,enc_msg:&str)-> String 
+{
+    let key = Key::from_slice(secret.as_bytes());
+    let cipher = ChaCha20Poly1305::new(key);
+
+    // Split nonce and actual ciphertext
+    let nonce_size = Nonce::len();
+    let nonce = Nonce::from_slice(&enc_msg[..nonce_size]);
+    let ciphertext = &enc_msg[nonce_size..];
+    let plaintext_bytes = cipher.decrypt(nonce, ciphertext)
+        .expect("Error: decryption !");
+
+    String::from_utf8(plaintext_bytes).expect("invalid UTF-8")
+}
 }
